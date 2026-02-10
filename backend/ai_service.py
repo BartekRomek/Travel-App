@@ -16,7 +16,7 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
         genai.configure(api_key=api_key)
         
         # WRACAMY DO MODELU, KTÓRY U CIEBIE DZIAŁAŁ
-        model = genai.GenerativeModel('gemini-flash-latest') 
+        model = genai.GenerativeModel('gemini-2.5-flash') 
         
         style_desc = ", ".join(styles) if styles else "Mix zwiedzania i relaksu"
 

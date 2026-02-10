@@ -11,7 +11,7 @@ API_URL = "http://localhost:8000"
 
 st.set_page_config(page_title="Planer AI", page_icon="🗺️", layout="wide")
 
-# --- CSS: Stylizacja kart i harmonogramu ---
+# --- CSS (Stylizacja: Karty Dnia, Atrakcji i Sidebar) ---
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
@@ -25,7 +25,7 @@ st.markdown("""
     .side-header { font-size: 1.1rem; font-weight: 800; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px; }
     .side-text { font-size: 0.9rem; line-height: 1.4; }
     
-    /* HARMONOGRAM - DZIEŃ */
+    /* HARMONOGRAM - NAGŁÓWEK DNIA */
     .day-card { 
         background-color: #ffca28; 
         color: #000; 
@@ -34,7 +34,7 @@ st.markdown("""
         font-weight: 800; 
         font-size: 1.1rem;
         border-left: 5px solid #ff6f00;
-        margin-top: 25px;
+        margin-top: 25px; /* Odstęp między dniami */
     }
     
     /* HARMONOGRAM - TREŚĆ (Biała Karta) */
@@ -59,11 +59,13 @@ st.markdown("""
     }
     .day-desc { font-size: 0.95rem; color: #333; line-height: 1.5; }
 
-    /* PRZYCISKI I ATRAKCJE */
+    /* PRZYCISKI */
     .action-btn { display: block; text-align: center; font-weight: bold; color: white !important; text-decoration: none; padding: 15px; border-radius: 10px; transition: transform 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.15); margin-bottom: 20px; }
     .action-btn:hover { transform: scale(1.02); }
     .btn-booking { background-color: #003580; } 
     .btn-transport { background-color: #00a859; }
+    
+    /* ATRAKCJE */
     .attraction-box { background-color: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .attr-title { font-size: 1rem; font-weight: bold; color: #333; margin-bottom: 5px; }
     .attr-desc { font-size: 0.85rem; color: #666; margin-bottom: 10px; line-height: 1.4; }
@@ -71,6 +73,8 @@ st.markdown("""
     .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
     .tag-price { background-color: #e8f5e9; color: #2e7d32; }
     .tag-type { background-color: #f3e5f5; color: #7b1fa2; }
+    
+    /* MAPA I LOADER */
     .map-container { border: 4px solid #ffca28; border-radius: 12px; overflow: hidden; margin-top: 20px; }
     .loader-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px 0; text-align: center; height: 70vh; }
     .custom-loader { border: 5px solid #f3f3f3; border-top: 5px solid #5d5fef; border-radius: 50%; width: 80px; height: 80px; animation: spin 1s linear infinite; margin-bottom: 30px; }
@@ -132,7 +136,11 @@ def show_dashboard(json_str, start_date_str, end_date_str, people_count):
         
         col_main, col_sidebar = st.columns([2.2, 1], gap="medium")
 
+        # === PRAWA KOLUMNA (SIDEBAR) ===
         with col_sidebar:
+            # FIX: Dodano nagłówek, aby wyrównać poziom z lewą kolumną
+            st.subheader("ℹ️ Niezbędnik")
+
             st.markdown(f"""
             <div class="side-card card-safety">
                 <div class="side-header">⚠️ Polak za granicą</div>
@@ -174,15 +182,15 @@ def show_dashboard(json_str, start_date_str, end_date_str, people_count):
             </div>
             """, unsafe_allow_html=True)
 
+        # === LEWA KOLUMNA (HARMONOGRAM) ===
         with col_main:
-            # --- ZMIENIONA SEKCJA HARMONOGRAMU (Karty zamiast zwijania) ---
             st.subheader("📅 Harmonogram Podróży")
             
             for day in data.get("daily_plan", []):
-                # Żółta belka (Nagłówek)
+                # Nagłówek dnia
                 st.markdown(f"""<div class="day-card">Dzień {day['day']}: {day['theme']}</div>""", unsafe_allow_html=True)
                 
-                # Biała karta z detalami
+                # Treść dnia (Biała karta, bez zwijania)
                 sch = day.get('schedule', {})
                 kc = day.get("key_attraction_coords")
                 attr_link = ""
@@ -207,6 +215,7 @@ def show_dashboard(json_str, start_date_str, end_date_str, people_count):
 
             st.divider()
 
+            # PRZYCISKI
             meta_dest = st.session_state.get('plan_meta', {}).get('dest', 'Hotel')
             booking_url = generate_booking_link(meta_dest, start_date_str, end_date_str, people_count)
             f_query = data.get("flight_search_query", {})
@@ -218,6 +227,7 @@ def show_dashboard(json_str, start_date_str, end_date_str, people_count):
             with c_btn2:
                 st.markdown(f'<a href="{g_flight}" target="_blank" class="action-btn btn-transport">✈️ TRANSPORT<br><span style="font-size:0.8rem; font-weight:normal; color:white">Znajdź loty</span></a>', unsafe_allow_html=True)
 
+            # ATRAKCJE I WYDARZENIA
             c_attr, c_event = st.columns(2)
             
             with c_attr:
