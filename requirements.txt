@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+bcrypt
+python-jose
+python-multipart
+google-generativeai
+python-dotenv
+streamlit
+extra-streamlit-components
+requests
+pandas
+pydantic
