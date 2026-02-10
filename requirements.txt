@@ -11,3 +11,5 @@ extra-streamlit-components
 requests
 pandas
 pydantic
+folium
+streamlit-folium

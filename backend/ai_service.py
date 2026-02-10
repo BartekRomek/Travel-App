@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+# Zakładam, że plik external_apis.py istnieje w backendzie
 from .external_apis import get_nbp_exchange_rate, get_weather_forecast, get_ticketmaster_events
 
 load_dotenv()
@@ -13,7 +14,9 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-flash-latest')
+        
+        # WRACAMY DO MODELU, KTÓRY U CIEBIE DZIAŁAŁ
+        model = genai.GenerativeModel('gemini-flash-latest') 
         
         style_desc = ", ".join(styles) if styles else "Mix zwiedzania i relaksu"
 
@@ -29,28 +32,24 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
         
         Zwróć TYLKO JSON:
         {{
-            "is_feasible": true/false,
-            "feasibility_message": "...",
-            "currency_code": "KOD", 
-            "location_coordinates": [lat, lon],
-            
-            "flight_search_query": {{ "origin_iata": "...", "dest_iata": "..." }},
+            "is_feasible": true,
+            "feasibility_message": "Plan OK.",
+            "currency_code": "EUR", 
+            "location_coordinates": [0.0, 0.0],
+            "flight_search_query": {{ "origin_iata": "WAW", "dest_iata": "XXX" }},
             "pole_abroad": {{ "visa_info": "...", "safety_warning": "...", "emergency_numbers": "..." }},
             "financial_analysis": {{ "total_estimated_cost": "...", "transport_cost": "...", "accommodation_cost": "...", "food_cost": "..." }},
-            "flights_and_transport": {{
-                "estimated_flight_price": "...", "flight_duration": "...",
-                "airport_transfer": [ {{ "type": "...", "cost": "...", "details": "..." }} ]
-            }},
-            "accommodation_section": {{ "best_districts": ["..."], "avg_prices": "...", "recommendation": "..." }},
+            "accommodation_section": {{ "best_districts": ["..."], "avg_prices": "..." }},
             "daily_plan": [
                 {{
                     "day": 1, "theme": "...", 
                     "schedule": {{ "morning": "...", "afternoon": "...", "evening": "..." }},
-                    "meals_data": {{ "breakfast": {{"name": "...", "coords": []}}, "lunch": {{"name": "...", "coords": []}}, "dinner": {{"name": "...", "coords": []}} }},
-                    "key_attraction_coords": [lat, lon], "key_attraction_name": "..."
+                    "key_attraction_coords": [0.0, 0.0], "key_attraction_name": "..."
                 }}
             ],
-            "coordinates_special": {{ "accommodation": [lat, lon] }}
+            "attractions": [
+                 {{ "name": "...", "description": "...", "price": "..." }}
+            ]
         }}
         """
         
@@ -59,29 +58,35 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
         
         try:
             data = json.loads(text)
-            
+            data["real_events"] = [] # Czyścimy na start
+
             # 1. API: Kurs Walut
             curr = data.get("currency_code", "EUR")
-            rate = get_nbp_exchange_rate(curr)
-            if rate: data["real_exchange_rate"] = rate
+            try:
+                rate = get_nbp_exchange_rate(curr)
+                if rate: data["real_exchange_rate"] = rate
+            except: pass
             
-            # 2. Współrzędne i API Lokalne
+            # 2. Współrzędne -> Ticketmaster & Pogoda
             coords = data.get("location_coordinates")
             if coords and len(coords) == 2:
                 lat, lon = coords[0], coords[1]
                 
-                # A. Pogoda (Dla daty startu)
-                weather = get_weather_forecast(lat, lon, start_date)
-                if weather: data["real_weather_forecast"] = weather
+                # A. Pogoda
+                try:
+                    weather = get_weather_forecast(lat, lon, start_date)
+                    if weather: data["real_weather_forecast"] = weather
+                except: pass
                 
-                # B. Wydarzenia (Dla całego pobytu)
-                # Obliczamy datę końca: start + days - 1
-                s_dt = datetime.strptime(start_date, "%Y-%m-%d")
-                e_dt = s_dt + timedelta(days=days)
-                end_date_str = e_dt.strftime("%Y-%m-%d")
-                
-                events = get_ticketmaster_events(lat, lon, start_date, end_date_str)
-                if events: data["real_events"] = events
+                # B. Wydarzenia Ticketmaster
+                try:
+                    s_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                    e_dt = s_dt + timedelta(days=days)
+                    end_date_str = e_dt.strftime("%Y-%m-%d")
+                    
+                    real_events = get_ticketmaster_events(lat, lon, start_date, end_date_str)
+                    data["real_events"] = real_events 
+                except: pass
             
             return json.dumps(data)
             
@@ -90,4 +95,5 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
 
     except Exception as e:
         print(f"Błąd AI: {e}")
-        return json.dumps({"error": "Błąd generowania"})
+        # Zwracamy błąd w formacie JSON, żeby frontend nie padł
+        return json.dumps({"is_feasible": False, "feasibility_message": f"Błąd AI (limit lub sieć): {str(e)}"})
