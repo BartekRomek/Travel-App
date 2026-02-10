@@ -4,82 +4,79 @@ import extra_streamlit_components as stx
 import json
 import pandas as pd
 from datetime import date, timedelta
+import folium
+from streamlit_folium import st_folium
 
 API_URL = "http://localhost:8000"
 
 st.set_page_config(page_title="Planer AI", page_icon="🗺️", layout="wide")
 
-# --- CSS (Clean & Professional) ---
+# --- CSS (Stylizacja zgodna z Twoim szkicem + KARTY ATRAKCJI) ---
 st.markdown("""
 <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
-    .dashboard-row { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+    .block-container { padding-top: 2rem; }
     
-    .equal-card {
-        background-color: white; padding: 20px; border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e0e0e0;
-        color: #333 !important; flex: 1; display: flex; flex-direction: column;
+    /* SIDEBAR (PRAWA STRONA) */
+    .side-card {
+        padding: 20px; border-radius: 12px; margin-bottom: 20px;
+        color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
+    .card-safety { background-color: #ff0000; } 
+    .card-finance { background-color: #6200ea; } 
+    .card-weather { background-color: #00bcd4; color: #000 !important; }
     
-    .card-red {
-        background-color: #fff5f5; padding: 20px; border-radius: 8px;
-        border: 1px solid #ffcdd2; color: #b71c1c !important; flex: 1;
+    .side-header { font-size: 1.1rem; font-weight: 800; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px; }
+    .side-text { font-size: 0.9rem; line-height: 1.4; }
+    
+    /* DNI (LEWA STRONA) */
+    .day-card {
+        background-color: #ffca28; color: #000; padding: 15px 20px;
+        border-radius: 10px; margin-bottom: 15px; font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 5px solid #ff6f00;
     }
-    .card-red .card-header { border-bottom: 1px solid #ffcdd2; color: #b71c1c; font-weight: bold; margin-bottom: 10px; }
 
-    .card-blue {
-        background-color: #e3f2fd; padding: 20px; border-radius: 8px;
-        border: 1px solid #90caf9; color: #0d47a1 !important; flex: 1;
+    /* BUTTONS (AKCJE) */
+    .action-btn {
+        display: block; text-align: center; font-weight: bold; color: white !important;
+        text-decoration: none; padding: 15px; border-radius: 10px;
+        transition: transform 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.15); margin-bottom: 20px;
     }
-    .card-blue .card-header { border-bottom: 1px solid #90caf9; color: #0d47a1; font-weight: bold; margin-bottom: 10px; }
+    .action-btn:hover { transform: scale(1.02); text-decoration: none; color: white; }
+    .btn-booking { background-color: #757575; } 
+    .btn-transport { background-color: #76ff03; color: #000 !important; }
 
-    /* Live Data Cards */
-    .card-gray {
-        background-color: #f8f9fa; padding: 15px; border-radius: 8px;
-        border: 1px solid #dee2e6; color: #495057 !important; flex: 1;
+    /* --- NOWE STYLE: KARTY ATRAKCJI (ZGODNIE Z OBRAZEM 2) --- */
+    .attraction-box {
+        background-color: white; border: 1px solid #e0e0e0; border-radius: 12px;
+        padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
+    .attr-title { font-size: 1rem; font-weight: bold; color: #333; margin-bottom: 5px; }
+    .attr-desc { font-size: 0.85rem; color: #666; margin-bottom: 10px; line-height: 1.4; }
     
-    /* Events Styling */
-    .event-card {
-        background-color: #fff; border: 1px solid #eee; border-radius: 8px;
-        padding: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 15px;
-        transition: transform 0.2s;
-    }
-    .event-card:hover { border-color: #ccc; transform: translateX(2px); }
-    .event-date {
-        background-color: #212529; color: #fff; padding: 8px 12px; border-radius: 6px;
-        text-align: center; min-width: 80px; font-weight: bold;
-        display: flex; flex-direction: column; justify-content: center;
-    }
-    .event-details { flex-grow: 1; }
-    .event-title { font-weight: bold; font-size: 1rem; color: #000; margin-bottom: 4px; }
-    .event-venue { font-size: 0.85rem; color: #666; }
-    
-    .custom-btn { display: inline-block; width: 100%; padding: 10px 0; background-color: #333; color: white !important; text-align: center; text-decoration: none; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; margin-top: 5px; font-size: 0.9rem; }
-    .booking-btn { background-color: #003580; }
-    .ticket-btn { 
-        background-color: #e91e63; color: white !important; padding: 8px 15px; 
-        font-size: 0.85rem; border-radius: 6px; text-decoration: none; font-weight: 600;
-        white-space: nowrap;
-    }
-    .ticket-btn:hover { background-color: #c2185b; }
+    .tag-container { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .tag-price { background-color: #e8f5e9; color: #2e7d32; } /* Zielony */
+    .tag-res { background-color: #fff8e1; color: #f57f17; }   /* Żółty */
+    .tag-type { background-color: #f3e5f5; color: #7b1fa2; }  /* Fioletowy */
 
-    .card-header { font-size: 1.1rem; font-weight: 700; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; color: #000; }
-    .card-text { font-size: 0.95rem; line-height: 1.5; color: #333; }
-    .flight-info-box { background-color: #f8f9fa; border-radius: 6px; padding: 10px; margin-bottom: 15px; border: 1px solid #eee; display: flex; justify-content: space-around; text-align: center; }
-    .day-container { display: flex; gap: 15px; margin-bottom: 15px; align-items: stretch; }
-    .time-slot-box { background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; color: #333; flex: 1; display: flex; flex-direction: column; }
-    .nav-link { color: #007bff; text-decoration: none; font-size: 0.85rem; font-weight: bold; }
-    .meal-link-box { margin-top: auto; padding-top: 8px; border-top: 1px dashed #eee; font-size: 0.85rem; color: #555; }
+    h4 { margin-top: 0 !important; margin-bottom: 15px !important; }
+
+    /* MAPA */
+    .map-container { border: 4px solid #ffca28; border-radius: 12px; overflow: hidden; margin-top: 20px; }
     
-    .stButton button { width: 100%; border-radius: 6px; font-weight: 600; }
-    @media (max-width: 768px) { .day-container { flex-direction: column; } }
+    /* LOADER */
+    .loader-container { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px 0; text-align: center; height: 70vh; }
+    .custom-loader { border: 5px solid #f3f3f3; border-top: 5px solid #5d5fef; border-radius: 50%; width: 80px; height: 80px; animation: spin 1s linear infinite; margin-bottom: 30px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loader-text { font-size: 1.8rem; font-weight: 700; color: #333; margin-bottom: 10px; }
+    .streamlit-expanderHeader { background-color: white; border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
 TRAVEL_STYLES = ["Historia", "Imprezy", "Natura", "Sztuka", "Foto", "Relaks", "Sport", "Zakupy"]
 
-# --- SESJA ---
+# --- HELPERY ---
 def get_manager(): return stx.CookieManager()
 cookie_manager = get_manager()
 cookie_token = cookie_manager.get(cookie="auth_token")
@@ -90,7 +87,6 @@ if 'plan_meta' not in st.session_state: st.session_state['plan_meta'] = {}
 if 'form_start_date' not in st.session_state: st.session_state['form_start_date'] = date.today()
 if 'form_end_date' not in st.session_state: st.session_state['form_end_date'] = date.today() + timedelta(days=3)
 
-# --- HELPERY ---
 def generate_flight_links(origin, dest, start_date_str, end_date_str):
     try:
         s_start = start_date_str.replace("-", "")[2:] 
@@ -108,230 +104,201 @@ def generate_booking_link(city, start_date_str, end_date_str, people):
 def make_maps_link(lat, lon):
     return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
 
+# --- MAPA ---
+def display_map(data):
+    lat, lon = 41.9028, 12.4964
+    if "location_coordinates" in data and len(data["location_coordinates"]) == 2:
+        lat, lon = data["location_coordinates"]
+    m = folium.Map(location=[lat, lon], zoom_start=12)
+    if "daily_plan" in data:
+        for day in data["daily_plan"]:
+            kc = day.get("key_attraction_coords")
+            name = day.get("key_attraction_name", "Atrakcja")
+            if kc and len(kc) == 2:
+                folium.Marker(kc, popup=f"Dzień {day['day']}: {name}", tooltip=name, icon=folium.Icon(color="red", icon="camera")).add_to(m)
+    st_folium(m, width=None, height=400)
+
 # --- DASHBOARD ---
 def show_dashboard(json_str, start_date_str, end_date_str, people_count):
     try:
         data = json.loads(json_str)
-        
         if data.get("is_feasible") is False:
-            st.error("BUDŻET KRYTYCZNY")
-            st.warning(data.get("feasibility_message"))
+            st.error("BUDŻET KRYTYCZNY: " + data.get("feasibility_message"))
             return
 
-        # 1. INFO GÓRA
         abroad = data.get("pole_abroad", {})
         fin = data.get("financial_analysis", {})
         
-        html_top = f"""
-<div class="dashboard-row">
-    <div class="card-red">
-        <div class="card-header">Polak za granicą</div>
-        <div class="card-text">
-            <strong>Wiza/Wjazd:</strong><br>{abroad.get('visa_info', '-')}<br><br>
-            <strong>Ostrzeżenia:</strong><br>{abroad.get('safety_warning', '-')}<br><br>
-            <strong>Alarmowe:</strong><br>{abroad.get('emergency_numbers', '-')}
-        </div>
-    </div>
-    <div class="card-blue">
-        <div class="card-header">Analiza Finansowa</div>
-        <div class="card-text">
-            <div style="font-size: 2rem; font-weight: bold;">{fin.get('total_estimated_cost', '-')}</div>
-            <br>
-            <strong>Transport:</strong> {fin.get('transport_cost', '-')}<br>
-            <strong>Noclegi:</strong> {fin.get('accommodation_cost', '-')}<br>
-            <strong>Jedzenie:</strong> {fin.get('food_cost', '-')}<br><br>
-            <em>{data.get('feasibility_message')}</em>
-        </div>
-    </div>
-</div>
-"""
-        st.markdown(html_top, unsafe_allow_html=True)
+        # --- UKŁAD: LEWA (TREŚĆ) | PRAWA (SIDEBAR) ---
+        col_main, col_sidebar = st.columns([2.2, 1], gap="medium")
 
-        # 2. LIVE DATA
-        weather_content = "Brak danych"
-        currency_content = "Brak danych"
-        
-        if "real_weather_forecast" in data:
-            w = data["real_weather_forecast"]
-            if "error" in w: weather_content = w['error']
-            else: weather_content = f"<strong>{w['desc']}</strong> (Max: {w['max_temp']}°C | Min: {w['min_temp']}°C)"
+        # === PRAWA STRONA (SIDEBAR) ===
+        with col_sidebar:
+            st.markdown(f"""
+            <div class="side-card card-safety">
+                <div class="side-header">⚠️ Polak za granicą</div>
+                <div class="side-text">
+                    <strong>Wiza:</strong> {abroad.get('visa_info', '-')}<br><br>
+                    <strong>Bezpieczeństwo:</strong> {abroad.get('safety_warning', '-')}<br><br>
+                    <strong>Alarmowe:</strong> {abroad.get('emergency_numbers', '-')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            curr_info = "Brak danych"
+            if "real_exchange_rate" in data:
+                code = data.get("currency_code", "EUR")
+                rate = data["real_exchange_rate"]
+                curr_info = f"1 {code} = {rate:.2f} PLN"
+
+            st.markdown(f"""
+            <div class="side-card card-finance">
+                <div class="side-header">💰 Finanse i Waluta</div>
+                <div class="side-text">
+                    <div style="font-size: 1.8rem; font-weight:bold; margin-bottom:5px;">{fin.get('total_estimated_cost', '-')}</div>
+                    Transport: {fin.get('transport_cost', '-')}<br>
+                    Noclegi: {fin.get('accommodation_cost', '-')}<br>
+                    Jedzenie: {fin.get('food_cost', '-')}<br><hr style="border-color: rgba(255,255,255,0.3);">
+                    <strong>Kurs NBP:</strong> {curr_info}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            weather_txt = "Brak danych"
+            if "real_weather_forecast" in data:
+                w = data["real_weather_forecast"]
+                if "error" not in w:
+                    weather_txt = f"{w['desc']}<br>Max: {w['max_temp']}°C | Min: {w['min_temp']}°C"
             
-        if "real_exchange_rate" in data:
-            curr = data.get("currency_code", "EUR")
-            rate = data["real_exchange_rate"]
-            currency_content = f"<strong>1 {curr} = {rate:.4f} PLN</strong> (Kurs NBP)"
+            st.markdown(f"""
+            <div class="side-card card-weather">
+                <div class="side-header">☀️ Pogoda</div>
+                <div class="side-text">{weather_txt}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        html_live = f"""
-<div class="dashboard-row">
-    <div class="card-gray">
-        <strong>Pogoda (Prognoza):</strong><br>
-        {weather_content}
-    </div>
-    <div class="card-gray">
-        <strong>Waluta (Live):</strong><br>
-        {currency_content}
-    </div>
-</div>
-"""
-        st.markdown(html_live, unsafe_allow_html=True)
-
-        # 3. LOGISTYKA
-        c3, c4 = st.columns(2)
-        with c3:
-            st.markdown("### Transport")
-            flight_data = data.get('flights_and_transport', {})
-            f_query = data.get("flight_search_query", {})
-            iata_origin = f_query.get('origin_iata', '')
-            iata_dest = f_query.get('dest_iata', '')
-            if not iata_origin or not iata_dest:
-                meta = st.session_state.get('plan_meta', {})
-                if not iata_origin: iata_origin = meta.get('origin', 'Warszawa')
-                if not iata_dest: iata_dest = meta.get('dest', '')
-
-            g_link, s_link = generate_flight_links(iata_origin, iata_dest, start_date_str, end_date_str)
-            trans_list = ""
-            for t in flight_data.get('airport_transfer', []):
-                trans_list += f"<li><strong>{t['type']}</strong> ({t['cost']}): {t.get('details','')}</li>"
-
-            html_transport = f"""
-<div class="equal-card">
-    <div class="card-header">Połączenie Lotnicze</div>
-    <div class="flight-info-box">
-        <div>
-            <div class="flight-metric-lbl">Szac. Cena</div>
-            <div class="flight-metric-val">{flight_data.get('estimated_flight_price', '-')}</div>
-        </div>
-        <div style="border-left: 1px solid #ddd;"></div>
-        <div>
-            <div class="flight-metric-lbl">Czas Lotu</div>
-            <div class="flight-metric-val">{flight_data.get('flight_duration', '-')}</div>
-        </div>
-    </div>
-    <div style="display: flex; gap: 10px;">
-        <a href="{g_link}" target="_blank" class="custom-btn">Google Flights</a>
-        <a href="{s_link}" target="_blank" class="custom-btn">Skyscanner</a>
-    </div>
-    <div style="margin-top: 20px;">
-        <strong>Transfer z lotniska:</strong>
-        <ul style="margin-top: 5px; padding-left: 20px; font-size: 0.9rem;">
-            {trans_list}
-        </ul>
-    </div>
-</div>
-"""
-            st.markdown(html_transport, unsafe_allow_html=True)
-
-        with c4:
-            st.markdown("### Noclegi")
-            acc = data.get("accommodation_section", {})
-            spec = data.get("coordinates_special", {})
-            acc_map_link = ""
-            if "accommodation" in spec and spec["accommodation"]:
-                link = make_maps_link(spec["accommodation"][0], spec["accommodation"][1])
-                acc_map_link = f'<br><a href="{link}" target="_blank" class="nav-link">Pokaż sugerowany rejon (Google Maps)</a>'
+        # === LEWA STRONA (TREŚĆ) ===
+        with col_main:
+            # 1. PRZYCISKI GÓRNE (BOOKING / TRANSPORT)
+            # Umieszczamy je teraz tutaj, lub pod planem. Zgodnie ze szkicem były pod planem, ale nad atrakcjami.
+            # Zróbmy tak: Plan -> Przyciski -> Sekcja Atrakcji -> Mapa
             
+            # --- SEKCJA PLANU DNIA ---
+            st.subheader("📅 Harmonogram Podróży")
+            for day in data.get("daily_plan", []):
+                st.markdown(f"""<div class="day-card">Dzień {day['day']}: {day['theme']}</div>""", unsafe_allow_html=True)
+                with st.expander("Zobacz szczegóły", expanded=False):
+                    sch = day.get('schedule', {})
+                    kc = day.get("key_attraction_coords")
+                    attr_link = ""
+                    if kc: attr_link = f" <a href='{make_maps_link(kc[0], kc[1])}' target='_blank'>[Mapa]</a>"
+                    st.markdown(f"**Rano:** {sch.get('morning','-')}")
+                    st.markdown(f"**Południe:** {sch.get('afternoon','-')} **{day.get('key_attraction_name','')}** {attr_link}")
+                    st.markdown(f"**Wieczór:** {sch.get('evening','-')}")
+
+            st.divider()
+
+            # --- SEKCJA NARZĘDZI (BOOKING & TRANSPORT) ---
             meta_dest = st.session_state.get('plan_meta', {}).get('dest', 'Hotel')
-            booking_link = generate_booking_link(meta_dest, start_date_str, end_date_str, people_count)
+            booking_url = generate_booking_link(meta_dest, start_date_str, end_date_str, people_count)
+            f_query = data.get("flight_search_query", {})
+            g_flight, s_flight = generate_flight_links(f_query.get('origin_iata','WAW'), f_query.get('dest_iata',''), start_date_str, end_date_str)
 
-            html_logistics = f"""
-<div class="equal-card">
-    <div class="card-text">
-        <strong>Sugerowane dzielnice:</strong><br>
-        {', '.join(acc.get('best_districts', []))}<br>
-        <span style="color: #666; font-size: 0.8rem;">{acc.get('avg_prices')}</span>
-        {acc_map_link}
-        <hr style="margin: 10px 0;">
-        <a href="{booking_link}" target="_blank" class="custom-btn booking-btn">Znajdź nocleg na Booking.com</a>
-        <div style="margin-top: 10px; font-size: 0.8rem; color: #666;">
-            Automatycznie wyszukuje dla {people_count} os. w terminie {start_date_str} - {end_date_str}
-        </div>
-    </div>
-</div>
-"""
-            st.markdown(html_logistics, unsafe_allow_html=True)
+            c_btn1, c_btn2 = st.columns(2)
+            with c_btn1:
+                st.markdown(f'<a href="{booking_url}" target="_blank" class="action-btn btn-booking">🏨 BOOKING<br><span style="font-size:0.8rem; font-weight:normal">Rezerwuj nocleg</span></a>', unsafe_allow_html=True)
+            with c_btn2:
+                st.markdown(f'<a href="{g_flight}" target="_blank" class="action-btn btn-transport">✈️ TRANSPORT<br><span style="font-size:0.8rem; font-weight:normal; color:black">Znajdź loty</span></a>', unsafe_allow_html=True)
 
-        st.divider()
-
-        # 4. HARMONOGRAM
-        st.subheader("Szczegółowy Plan Podróży")
-        for day in data.get("daily_plan", []):
-            st.markdown(f"#### Dzień {day['day']}: {day['theme']}")
+            # --- SEKCJA SZCZEGÓŁOWA: ATRAKCJE I WYDARZENIA (ZAMIAST FIOLETOWEGO PRZYCISKU) ---
+            # Tutaj wchodzi layout z "obrazu 2"
             
-            main_attr_link = ""
-            kc = day.get("key_attraction_coords")
-            if kc and len(kc) == 2:
-                lnk = make_maps_link(kc[0], kc[1])
-                main_attr_link = f'<a href="{lnk}" target="_blank" class="nav-link">Atrakcja: {day.get("key_attraction_name")}</a>'
+            c_attr, c_event = st.columns(2)
+            
+            with c_attr:
+                st.markdown("#### 🏰 Atrakcje")
+                # Jeśli API zwróciło dedykowaną listę atrakcji, użyj jej. Jeśli nie, wyciągnij z planu dnia.
+                attractions_list = data.get("attractions", [])
+                
+                # Fallback: jeśli lista pusta, wyciągnij główne atrakcje z dni
+                if not attractions_list:
+                    for day in data.get("daily_plan", []):
+                        if day.get("key_attraction_name"):
+                            attractions_list.append({
+                                "name": day.get("key_attraction_name"),
+                                "description": day.get("theme", "Atrakcja dnia"),
+                                "price": "Cena wg cennika",
+                                "reservation": "Sprawdź dostępność"
+                            })
 
-            sch = day.get('schedule', {})
-            meals = day.get('meals_data', {})
-
-            def get_meal_html(meal_key, label):
-                if meal_key in meals:
-                    m = meals[meal_key]
-                    if "coords" in m and len(m["coords"]) == 2:
-                        l = make_maps_link(m["coords"][0], m["coords"][1])
-                        return f"<div class='meal-link-box'>{label}: <a href='{l}' target='_blank' class='nav-link'>{m.get('name')}</a></div>"
-                return ""
-
-            day_html = f"""
-<div class="day-container">
-    <div class="time-slot-box">
-        <div class="time-label">PORANEK</div>
-        <div class="slot-content">{sch.get('morning', '-')}</div>
-        {get_meal_html('breakfast', 'Śniadanie')}
-    </div>
-    <div class="time-slot-box">
-        <div class="time-label">POŁUDNIE</div>
-        <div class="slot-content">
-            {sch.get('afternoon', '-')}
-            <br>{main_attr_link}
-        </div>
-        {get_meal_html('lunch', 'Lunch')}
-    </div>
-    <div class="time-slot-box">
-        <div class="time-label">WIECZÓR</div>
-        <div class="slot-content">{sch.get('evening', '-')}</div>
-        {get_meal_html('dinner', 'Kolacja')}
-    </div>
-</div>
-"""
-            st.markdown(day_html, unsafe_allow_html=True)
-
-        st.divider()
-
-        # 5. WYDARZENIA - NA SAMYM DOLE, ZWIJANE
-        if "real_events" in data and data["real_events"]:
-            with st.expander("🎭 Ciekawostki: Sprawdź wydarzenia w okolicy (Opcjonalne)"):
-                st.caption("Poniżej znajdziesz koncerty, wydarzenia sportowe i kulturalne odbywające się w czasie Twojego pobytu.")
-                events_html = ""
-                for e in data["real_events"]:
-                    events_html += f"""
-                    <div class="event-card">
-                        <div class="event-date">
-                            <div>{e['date']}</div>
-                            <div style="font-size:0.8rem; font-weight:normal; margin-top:2px;">{e['time']}</div>
+                for item in attractions_list[:4]: # Pokaż max 4, żeby nie wydłużać
+                    name = item.get("name", "Atrakcja")
+                    desc = item.get("description", "Opis niedostępny")
+                    price = item.get("price", "Bilet")
+                    res = item.get("reservation", "")
+                    
+                    res_tag = f'<div class="tag tag-res">{res}</div>' if res else ""
+                    
+                    st.markdown(f"""
+                    <div class="attraction-box">
+                        <div class="attr-title">{name}</div>
+                        <div class="attr-desc">{desc}</div>
+                        <div class="tag-container">
+                            <div class="tag tag-price">{price}</div>
+                            {res_tag}
                         </div>
-                        <div class="event-details">
-                            <div class="event-title">{e['name']}</div>
-                            <div class="event-venue">📍 {e['venue']}</div>
-                        </div>
-                        <a href="{e['url']}" target="_blank" class="ticket-btn">Kup Bilet</a>
                     </div>
-                    """
-                st.markdown(events_html, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
+
+            with c_event:
+                st.markdown("#### 🎉 Wydarzenia")
+                events = data.get("real_events", [])
+                if events:
+                    for e in events[:4]:
+                        st.markdown(f"""
+                        <div class="attraction-box">
+                            <div class="attr-title">{e['name']}</div>
+                            <div class="attr-desc">{e['venue']} | {e['date']}</div>
+                            <div class="tag-container">
+                                <div class="tag tag-type">BILET</div>
+                                <a href="{e['url']}" target="_blank" style="font-size:0.8rem; margin-left:auto;">Kup Bilet &rarr;</a>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("Brak dużych wydarzeń w tym terminie.")
+
+            # --- MAPA (NA SAMYM DOLE) ---
+            st.markdown('<div class="map-container">', unsafe_allow_html=True)
+            display_map(data)
+            st.markdown('</div>', unsafe_allow_html=True)
 
     except Exception as e:
-        st.error(f"Błąd wyświetlania: {e}")
+        st.error(f"Błąd wyświetlania dashboardu: {e}")
 
 # --- UI STARTOWE ---
-st.title("Planer AI")
+col_head_left, col_head_right = st.columns([4, 1])
+with col_head_left:
+    st.title("Planer AI 🌍")
+    if st.session_state['plan_meta']:
+        m = st.session_state['plan_meta']
+        st.caption(f"Kierunek: **{m.get('dest')}** | {m.get('start_date')} - {m.get('end_date')} | {m.get('people')} os.")
+
+with col_head_right:
+    if st.session_state['token']:
+        if st.button("👤 Wyloguj"):
+            cookie_manager.delete("auth_token")
+            st.session_state['token'] = None
+            st.rerun()
+    else:
+        st.info("Gość")
 
 tabs = st.tabs(["Zaplanuj", "Moje Plany", "Konto"])
 
 with tabs[0]:
+    form_placeholder = st.empty()
     if not st.session_state['current_plan']:
-        with st.container():
+        with form_placeholder.container():
             st.info("Wypełnij formularz. Podaj daty, aby znaleźć najlepsze loty.")
             with st.form("main"):
                 c1, c2 = st.columns(2)
@@ -340,53 +307,46 @@ with tabs[0]:
                 c3, c4 = st.columns(2)
                 start_date = c3.date_input("Data Wylotu", value=st.session_state['form_start_date'])
                 end_date = c4.date_input("Data Powrotu", value=st.session_state['form_end_date'])
-                styles = st.multiselect("Styl (Opcjonalne)", TRAVEL_STYLES, max_selections=3)
+                styles = st.multiselect("Styl", TRAVEL_STYLES, max_selections=3)
                 c5, c6 = st.columns(2)
                 ppl = c5.number_input("Osób", 1, 10, 2)
                 bud = c6.number_input("Budżet/os (PLN)", value=3000, step=100)
-                
                 submitted = st.form_submit_button("Generuj Plan")
-                if submitted:
-                    st.session_state['form_start_date'] = start_date
-                    st.session_state['form_end_date'] = end_date
-                    if end_date < start_date:
-                        st.error("Data powrotu musi być późniejsza niż wylotu!")
-                    else:
-                        days = (end_date - start_date).days + 1
-                        with st.spinner(f"Pobieram wydarzenia, pogodę i układam plan na {days} dni..."):
-                            payload = {
-                                "origin": orig, "destination": dest, "start_date": str(start_date),
-                                "days": days, "people": ppl, "budget": bud, "styles": styles
-                            }
-                            try:
-                                res = requests.post(f"{API_URL}/generate", json=payload, timeout=120)
-                                if res.status_code == 200:
-                                    st.session_state['current_plan'] = res.json()['plan']
-                                    st_style = ", ".join(styles) if styles else "Ogólny"
-                                    st.session_state['plan_meta'] = {
-                                        "origin": orig, "dest": dest, 
-                                        "days": days, "style": st_style, 
-                                        "start_date": str(start_date), "end_date": str(end_date),
-                                        "people": ppl
-                                    }
-                                    st.rerun()
-                                else: st.error("Błąd AI")
-                            except Exception as e: st.error(f"Błąd: {e}")
+        
+        if submitted:
+            form_placeholder.empty()
+            loader_placeholder = st.empty()
+            with loader_placeholder.container():
+                st.markdown("""<div class="loader-container"><div class="custom-loader"></div><div class="loader-text">AI planuje Twoją podróż...</div><div class="loader-subtext">To może potrwać chwilę.</div></div>""", unsafe_allow_html=True)
+
+            st.session_state['form_start_date'] = start_date
+            st.session_state['form_end_date'] = end_date
+            days = (end_date - start_date).days + 1
+            payload = {"origin": orig, "destination": dest, "start_date": str(start_date), "days": days, "people": ppl, "budget": bud, "styles": styles}
+            try:
+                res = requests.post(f"{API_URL}/generate", json=payload, timeout=120)
+                if res.status_code == 200:
+                    st.session_state['current_plan'] = res.json()['plan']
+                    st_style = ", ".join(styles) if styles else "Ogólny"
+                    st.session_state['plan_meta'] = {"origin": orig, "dest": dest, "days": days, "style": st_style, "start_date": str(start_date), "end_date": str(end_date), "people": ppl}
+                    st.rerun()
+                else:
+                    loader_placeholder.empty()
+                    st.error("Błąd AI")
+            except Exception as e:
+                loader_placeholder.empty()
+                st.error(f"Błąd: {e}")
     else:
         c_left, c_right = st.columns([1, 5])
         with c_left:
             if st.button("⬅️ Nowy"):
                 st.session_state['current_plan'] = None
                 st.rerun()
-        with c_right:
-            st.header(f"Raport: {st.session_state['plan_meta'].get('dest', 'Podróż')}")
-        
         meta = st.session_state.get('plan_meta', {})
         show_dashboard(st.session_state['current_plan'], meta.get('start_date'), meta.get('end_date'), meta.get('people', 2))
-        
         if st.session_state['token']:
             st.divider()
-            if st.button("Zapisz raport"):
+            if st.button("Zapisz w historii"):
                 h = {"Authorization": f"Bearer {st.session_state['token']}"}
                 p = {"destination": meta.get('dest'), "days": meta.get('days'), "style": meta.get('style'), "plan_json": st.session_state['current_plan']}
                 requests.post(f"{API_URL}/save-trip", json=p, headers=h)
@@ -398,10 +358,8 @@ with tabs[1]:
         r = requests.get(f"{API_URL}/my-trips", headers=h)
         if r.status_code == 200:
             for t in r.json():
-                with st.expander(f"{t['destination']} ({t['days']} dni)"): 
-                    fallback_start = str(date.today())
-                    fallback_end = str(date.today() + timedelta(days=t['days']))
-                    show_dashboard(t['plan_json'], fallback_start, fallback_end, 2)
+                with st.expander(f"{t['destination']} ({t['days']} dni)"):
+                    show_dashboard(t['plan_json'], str(date.today()), str(date.today()+timedelta(days=t['days'])), 2)
     else: st.info("Zaloguj się.")
 
 with tabs[2]:
@@ -417,15 +375,14 @@ with tabs[2]:
                 rr = requests.post(f"{API_URL}/{ep}", json=pay)
                 if rr.status_code == 200:
                     tok = rr.json()['access_token'] if m == "Logowanie" else None
-                    if tok: 
+                    if tok:
                         st.session_state['token'] = tok
                         cookie_manager.set("auth_token", tok)
                         st.rerun()
-                    else: st.success("Gotowe!")
             except: pass
     else:
-        st.write("Zalogowany.")
-        if st.button("Wyloguj"):
+        st.write("Jesteś zalogowany.")
+        if st.button("Wyloguj sesję"):
             cookie_manager.delete("auth_token")
             st.session_state['token'] = None
             st.rerun()
