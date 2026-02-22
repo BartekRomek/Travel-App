@@ -17,7 +17,7 @@ def get_db():
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# --- MODELE DANYCH (To musi pasować do Frontendu!) ---
+# --- MODELE DANYCH ---
 
 class RegisterReq(BaseModel):
     username: str
@@ -31,16 +31,16 @@ class LoginReq(BaseModel):
 class TripReq(BaseModel):
     origin: str
     destination: str
-    start_date: str       # Frontend wysyła to jako napis "RRRR-MM-DD"
+    start_date: str       
     days: int
     people: int
-    budget: int           # Frontend wysyła liczbę
-    styles: List[str]     # Frontend wysyła LISTĘ napisów (np. ["Historia", "Impreza"])
+    budget_per_person: int  
+    styles: List[str]     
 
 class SaveTripReq(BaseModel):
     destination: str
     days: int
-    style: str            # Do zapisu w bazie sklejamy to w jeden napis
+    style: str            
     plan_json: str
 
 # --- ENDPOINTY ---
@@ -66,17 +66,15 @@ def login(creds: LoginReq, db: Session = Depends(get_db)):
     token = auth.create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-# --- TUTAJ BYŁ BŁĄD, TERAZ JEST POPRAWIONE ---
 @app.post("/generate")
 def generate(trip: TripReq):
-    # Przekazujemy wszystkie nowe parametry do AI
     plan = ai_service.generate_trip_plan(
         trip.origin, 
         trip.destination, 
         trip.start_date,
         trip.days, 
         trip.people, 
-        trip.budget, 
+        trip.budget_per_person, 
         trip.styles
     )
     return {"plan": plan}
@@ -95,7 +93,25 @@ def save_trip(trip: SaveTripReq, token: str = Depends(oauth2_scheme), db: Sessio
     return {"msg": "Zapisano"}
 
 @app.get("/my-trips")
-def get_trips(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_my_trips(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = auth.get_user_by_token(db, token)
     if not user: raise HTTPException(status_code=401)
-    return db.query(models.Trip).filter(models.Trip.owner_id == user.id).all()
+    
+    # Zmiana na models.Trip i owner_id
+    trips = db.query(models.Trip).filter(models.Trip.owner_id == user.id).all()
+    return [{"id": t.id, "destination": t.destination, "days": t.days, "plan_json": t.plan_json} for t in trips]
+
+@app.delete("/delete-trip/{trip_id}")
+def delete_trip(trip_id: int, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user = auth.get_user_by_token(db, token)
+    if not user: raise HTTPException(status_code=401)
+    
+    # Zmiana na models.Trip i owner_id, upewniamy się że to plan tego użytkownika
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id, models.Trip.owner_id == user.id).first()
+    
+    if not trip:
+        raise HTTPException(status_code=404, detail="Plan nie został znaleziony lub nie masz do niego dostępu")
+    
+    db.delete(trip)
+    db.commit()
+    return {"message": "Plan usunięty pomyślnie"}

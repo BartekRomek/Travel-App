@@ -3,7 +3,6 @@ import os
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-# Zostawiamy tylko to, co działa pewnie (waluty i pogoda)
 from .external_apis import get_nbp_exchange_rate, get_weather_forecast
 
 load_dotenv()
@@ -14,9 +13,7 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
 
     try:
         genai.configure(api_key=api_key)
-        
-        # Używamy modelu, który u Ciebie działał ostatnio
-        model = genai.GenerativeModel('gemini-2.5-flash') 
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         style_desc = ", ".join(styles) if styles else "Mix zwiedzania i relaksu"
 
@@ -26,20 +23,40 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
         Budżet: {budget_per_person} PLN/os. Styl: {style_desc}.
 
         WYMAGANIA:
-        1. Zidentyfikuj kod waluty docelowej (np. EUR, USD).
-        2. Zidentyfikuj współrzędne geograficzne (lat, lon) centrum miasta docelowego.
-        3. Stwórz spójny, narracyjny plan dnia z wplecionymi posiłkami.
+        1. Zidentyfikuj kod waluty docelowej.
+        2. Zidentyfikuj współrzędne (lat, lon) centrum miasta docelowego.
+        3. Stwórz plan dnia.
+        4. Stwórz SZCZEGÓŁOWĄ sekcję transportu (loty, transfer z lotniska, alternatywa np. pociąg/autobus).
         
         Zwróć TYLKO JSON:
         {{
             "is_feasible": true,
-            "feasibility_message": "Plan OK.",
+            "feasibility_message": "...",
             "currency_code": "EUR", 
             "location_coordinates": [0.0, 0.0],
-            "flight_search_query": {{ "origin_iata": "WAW", "dest_iata": "XXX" }},
+            
+            "transport_detailed": {{
+                "flight": {{
+                    "best_option": "Ryanair/Wizzair (Bezpośredni)",
+                    "estimated_price": "...",
+                    "duration": "...",
+                    "search_query": {{ "origin_iata": "WAW", "dest_iata": "XXX" }}
+                }},
+                "airport_transfer": [
+                    {{ "name": "Pociąg Express", "price": "...", "duration": "..." }},
+                    {{ "name": "Autobus Shuttle", "price": "...", "duration": "..." }}
+                ],
+                "alternative_transport": {{
+                    "type": "Autobus (FlixBus) lub Pociąg",
+                    "price": "...",
+                    "duration": "...",
+                    "description": "Dla osób bojących się latać..."
+                }}
+            }},
+
+            "accommodation_summary": "...",
             "pole_abroad": {{ "visa_info": "...", "safety_warning": "...", "emergency_numbers": "..." }},
             "financial_analysis": {{ "total_estimated_cost": "...", "transport_cost": "...", "accommodation_cost": "...", "food_cost": "..." }},
-            "accommodation_section": {{ "best_districts": ["..."], "avg_prices": "..." }},
             "daily_plan": [
                 {{
                     "day": 1, "theme": "...", 
@@ -48,9 +65,6 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
                 }}
             ],
             "attractions": [
-                 {{ "name": "...", "description": "...", "price": "..." }},
-                 {{ "name": "...", "description": "...", "price": "..." }},
-                 {{ "name": "...", "description": "...", "price": "..." }},
                  {{ "name": "...", "description": "...", "price": "..." }}
             ]
         }}
@@ -62,21 +76,15 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
         try:
             data = json.loads(text)
             
-            # 1. API: Kurs Walut
             curr = data.get("currency_code", "EUR")
-            try:
-                rate = get_nbp_exchange_rate(curr)
-                if rate: data["real_exchange_rate"] = rate
-            except: pass
+            rate = get_nbp_exchange_rate(curr)
+            if rate: data["real_exchange_rate"] = rate
             
-            # 2. API: Pogoda (po współrzędnych)
             coords = data.get("location_coordinates")
             if coords and len(coords) == 2:
                 lat, lon = coords[0], coords[1]
-                try:
-                    weather = get_weather_forecast(lat, lon, start_date)
-                    if weather: data["real_weather_forecast"] = weather
-                except: pass
+                weather = get_weather_forecast(lat, lon, start_date)
+                if weather: data["real_weather_forecast"] = weather
             
             return json.dumps(data)
             
@@ -85,4 +93,4 @@ def generate_trip_plan(origin, destination, start_date, days, people, budget_per
 
     except Exception as e:
         print(f"Błąd AI: {e}")
-        return json.dumps({"is_feasible": False, "feasibility_message": f"Błąd generowania: {str(e)}"})
+        return json.dumps({"error": "Błąd generowania"})
