@@ -1,11 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List
 from backend import models, database, auth, ai_service
 
-app = FastAPI()
+app = FastAPI(title="Travel AI API")
 
 # Tworzymy bazę przy starcie
 models.Base.metadata.create_all(bind=database.engine)
@@ -15,26 +15,26 @@ def get_db():
     try: yield db
     finally: db.close()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
-# --- MODELE DANYCH ---
-
+# --- MODELE DANYCH (TWARDA WALIDACJA SERWEROWA) ---
 class RegisterReq(BaseModel):
-    username: str
-    email: str
-    password: str
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str = Field(..., min_length=5, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)
 
 class LoginReq(BaseModel):
     email: str
     password: str
 
 class TripReq(BaseModel):
-    origin: str
-    destination: str
+    # Nawet jak haker zmieni HTML, serwer odrzuci dane poza tymi widełkami!
+    origin: str = Field(..., min_length=2, max_length=100)
+    destination: str = Field(..., min_length=2, max_length=100)
     start_date: str       
-    days: int
-    people: int
-    budget_per_person: int  
+    days: int = Field(..., ge=1, le=30)              # ge=Greater/Equal (min 1), le=Less/Equal (max 30)
+    people: int = Field(..., ge=1, le=20)            # max 20 osób
+    budget_per_person: int = Field(..., ge=100, le=100000) # budżet od 100 zł do 100 000 zł
     styles: List[str]     
 
 class SaveTripReq(BaseModel):
@@ -43,9 +43,10 @@ class SaveTripReq(BaseModel):
     style: str            
     plan_json: str
 
-# --- ENDPOINTY ---
 
-@app.post("/register")
+# --- ENDPOINTY AUTORYZACJI (/api/auth/...) ---
+
+@app.post("/api/auth/register", tags=["Auth"])
 def register(user: RegisterReq, db: Session = Depends(get_db)):
     if db.query(models.User).filter(models.User.email == user.email).first():
         raise HTTPException(status_code=400, detail="Email zajęty")
@@ -56,17 +57,20 @@ def register(user: RegisterReq, db: Session = Depends(get_db)):
     )
     db.add(new_user)
     db.commit()
-    return {"msg": "OK"}
+    return {"msg": "Utworzono konto"}
 
-@app.post("/login")
+@app.post("/api/auth/login", tags=["Auth"])
 def login(creds: LoginReq, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == creds.email).first()
     if not user or not auth.verify_password(creds.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Błąd logowania")
+        raise HTTPException(status_code=400, detail="Nieprawidłowy email lub hasło")
     token = auth.create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-@app.post("/generate")
+
+# --- ENDPOINTY PODRÓŻY (/api/trips/...) ---
+
+@app.post("/api/trips/generate", tags=["Trips"])
 def generate(trip: TripReq):
     plan = ai_service.generate_trip_plan(
         trip.origin, 
@@ -79,10 +83,10 @@ def generate(trip: TripReq):
     )
     return {"plan": plan}
 
-@app.post("/save-trip")
+@app.post("/api/trips", tags=["Trips"])
 def save_trip(trip: SaveTripReq, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = auth.get_user_by_token(db, token)
-    if not user: raise HTTPException(status_code=401)
+    if not user: raise HTTPException(status_code=401, detail="Brak autoryzacji")
     
     new_trip = models.Trip(
         destination=trip.destination, days=trip.days, style=trip.style,
@@ -90,27 +94,24 @@ def save_trip(trip: SaveTripReq, token: str = Depends(oauth2_scheme), db: Sessio
     )
     db.add(new_trip)
     db.commit()
-    return {"msg": "Zapisano"}
+    return {"msg": "Plan został zapisany"}
 
-@app.get("/my-trips")
+@app.get("/api/trips", tags=["Trips"])
 def get_my_trips(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = auth.get_user_by_token(db, token)
-    if not user: raise HTTPException(status_code=401)
+    if not user: raise HTTPException(status_code=401, detail="Brak autoryzacji")
     
-    # Zmiana na models.Trip i owner_id
     trips = db.query(models.Trip).filter(models.Trip.owner_id == user.id).all()
     return [{"id": t.id, "destination": t.destination, "days": t.days, "plan_json": t.plan_json} for t in trips]
 
-@app.delete("/delete-trip/{trip_id}")
+@app.delete("/api/trips/{trip_id}", tags=["Trips"])
 def delete_trip(trip_id: int, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = auth.get_user_by_token(db, token)
-    if not user: raise HTTPException(status_code=401)
+    if not user: raise HTTPException(status_code=401, detail="Brak autoryzacji")
     
-    # Zmiana na models.Trip i owner_id, upewniamy się że to plan tego użytkownika
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id, models.Trip.owner_id == user.id).first()
-    
     if not trip:
-        raise HTTPException(status_code=404, detail="Plan nie został znaleziony lub nie masz do niego dostępu")
+        raise HTTPException(status_code=404, detail="Plan nie został znaleziony")
     
     db.delete(trip)
     db.commit()

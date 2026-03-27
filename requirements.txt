@@ -13,3 +13,4 @@ pandas
 pydantic
 folium
 streamlit-folium
+fpdf2
