@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secretpassword
+      POSTGRES_DB: travel_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # DODANE: Sprawdzanie zdrowia bazy (Healthcheck)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d travel_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy # DODANE: Czekaj aż baza będzie "healthy"
+    environment:
+      - DATABASE_URL=postgresql://admin:secretpassword@db:5432/travel_db
+    env_file:
+      - .env
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    environment:
+      - API_URL=http://backend:8000
+
+volumes:
+  postgres_data:

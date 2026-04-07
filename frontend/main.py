@@ -7,12 +7,13 @@ import folium
 from streamlit_folium import st_folium
 from fpdf import FPDF
 import os
+import time
 
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
 st.set_page_config(page_title="Planer Podróży AI", layout="wide")
 
-# Wstrzykiwanie stylów CSS (ograniczenie skalowania na bardzo szerokich ekranach)
+# Dodanie stylów CSS
 st.markdown("""
     <style>
     .block-container {
@@ -88,7 +89,7 @@ def generate_pdf(data, meta):
     if isinstance(out, str): return out.encode('latin-1')
     return bytes(out)
 
-# --- HELPERY SESJI I LOGIKI ---
+# HELPERY SESJI I LOGIKI 
 def get_manager(): return stx.CookieManager()
 cookie_manager = get_manager()
 cookie_token = cookie_manager.get(cookie="auth_token")
@@ -267,12 +268,15 @@ with col_h1:
 with col_h2:
     if st.session_state['token']:
         st.write("Zalogowany")
-        if st.button("Wyloguj"):
-            cookie_manager.delete("auth_token")
+        # PRZYCISK WYLOGOWYWANIA
+        if st.button("Wyloguj", key="top_logout"):
+            if "auth_token" in cookie_manager.cookies:
+                cookie_manager.delete("auth_token")
             st.session_state['token'] = None
+            time.sleep(0.5)
             st.rerun()
 
-# --- ZAKŁADKI GŁÓWNE ---
+# ZAKŁADKI GŁÓWNE
 tab1, tab2 = st.tabs(["Plan podróży", "Konto"])
 
 with tab1:
@@ -280,8 +284,8 @@ with tab1:
         st.markdown("### Wprowadź szczegóły podróży")
         with st.form("travel_form"):
             c1, c2 = st.columns(2)
-            orig = c1.text_input("Skąd wyruszasz?")
-            dest = c2.text_input("Gdzie chcesz jechać?")
+            orig = c1.text_input("Skąd wyruszasz?", "Warszawa")
+            dest = c2.text_input("Gdzie chcesz jechać?", "Rzym")
             
             c3, c4 = st.columns(2)
             start_date = c3.date_input("Data wylotu", date.today() + timedelta(days=7))
@@ -302,7 +306,6 @@ with tab1:
                         "days": int(days), "people": int(ppl), "budget_per_person": int(bud), "styles": styles
                     }
                     try:
-                        # Wymuszony, bezpieczny Timeout wynoszący aż 3 minuty (180s)!
                         res = requests.post(f"{API_URL}/api/trips/generate", json=payload, timeout=180)
                         if res.status_code == 200:
                             status.update(label="Gotowe!", state="complete", expanded=False)
@@ -373,9 +376,12 @@ with tab2:
             st.subheader("Profil użytkownika")
             st.success("Jesteś zalogowany.")
             st.info("Dodatkowe zarządzanie profilem (w przygotowaniu).")
-            if st.button("Wyloguj sesję"):
-                cookie_manager.delete("auth_token")
+            
+            if st.button("Wyloguj sesję", key="tab_logout"):
+                if "auth_token" in cookie_manager.cookies:
+                    cookie_manager.delete("auth_token")
                 st.session_state['token'] = None
+                time.sleep(0.5)
                 st.rerun()
                 
         with sub_tab2:

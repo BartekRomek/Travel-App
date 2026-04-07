@@ -3,7 +3,7 @@ from backend.database import Base
 from pydantic import BaseModel
 from typing import List, Optional
 
-# --- BAZA DANYCH (SQL) ---
+# BAZA DANYCH
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -16,12 +16,11 @@ class Trip(Base):
     id = Column(Integer, primary_key=True, index=True)
     destination = Column(String)
     days = Column(Integer)
-    # W bazie zapiszemy style jako jeden napis po przecinku np. "Historia, Impreza"
     style = Column(String) 
     plan_json = Column(Text)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-# --- MODELE KOMUNIKACJI (API) ---
+# API
 class RegisterReq(BaseModel):
     username: str
     email: str
@@ -34,14 +33,14 @@ class LoginReq(BaseModel):
 class TripReq(BaseModel):
     origin: str
     destination: str
-    start_date: str      # NOWOŚĆ: Data początkowa (np. "2024-05-01")
+    start_date: str
     days: int
     people: int
-    budget: int          # NOWOŚĆ: Liczba (sztywny limit)
-    styles: List[str]    # NOWOŚĆ: Lista wybranych stylów
+    budget: int
+    styles: List[str]
 
 class SaveTripReq(BaseModel):
     destination: str
     days: int
-    style: str           # Tu już wysyłamy sklejony napis
+    style: str
     plan_json: str

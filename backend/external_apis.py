@@ -2,7 +2,7 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-# --- API 1: NBP (Kursy Walut) ---
+# API 1: Kurs waluty
 def get_nbp_exchange_rate(currency_code):
     if currency_code == "PLN": return 1.0
     try:
@@ -14,7 +14,7 @@ def get_nbp_exchange_rate(currency_code):
         print(f"Błąd NBP: {e}")
     return None
 
-# --- API 2: Open-Meteo (Pogoda) ---
+# API 2: Open-Meteo
 def get_weather_forecast(lat, lon, start_date_str):
     try:
         start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
@@ -46,7 +46,6 @@ def get_weather_forecast(lat, lon, start_date_str):
     return None
 
 def wmo_code_to_text(code):
-    # Styl Clean (Bez emotikon)
     if code == 0: return "Bezchmurnie"
     if code in [1, 2, 3]: return "Częściowe zachmurzenie"
     if code in [45, 48]: return "Mgła"

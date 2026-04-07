@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 from backend import models
 
-# Klucz do szyfrowania tokenów (w produkcji trzymaj w .env!)
+# .ENV
 SECRET_KEY = "bardzo-tajny-klucz-planer-ai"
 ALGORITHM = "HS256"
 
@@ -16,7 +16,7 @@ def get_password_hash(password):
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=60) # Token ważny godzinę
+    expire = datetime.utcnow() + timedelta(minutes=60)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
